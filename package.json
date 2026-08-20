@@ -1,0 +1,12 @@
+{
+  "name": "bch-radar",
+  "version": "1.0.0",
+  "description": "BCH Radar — Bitcoin Cash network observatory. Multi-provider, no single point of failure.",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
