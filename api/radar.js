@@ -13,22 +13,16 @@ function withGlobalTimeout(promise, fallback) {
 module.exports = async (req, res) => {
   const startedAt = Date.now();
 
-  const [network, blocksResult, mempool, marketConsensus, consensus] = await Promise.all([
+  const [network, blocksResult, mempool, marketConsensus] = await Promise.all([
     withGlobalTimeout(blockchainProviders.getNetworkStats(), { data: null, source: null }),
     withGlobalTimeout(blockchainProviders.getBlocks(10), { data: null, source: null }),
     withGlobalTimeout(blockchainProviders.getMempool(), { data: null, source: null }),
     withGlobalTimeout(marketProviders.getMarketConsensus(), { price: null }),
-    withGlobalTimeout(blockchainProviders.getLatestBlockConsensus(), { consensus: 'unavailable', results: {} }),
   ]);
 
   const payload = {
     network: network.data
-      ? {
-          ...network.data,
-          consensus: consensus.consensus || 'unavailable',
-          status: 'fresh',
-          source: network.source,
-        }
+      ? { ...network.data, status: 'fresh', source: network.source }
       : { status: 'unavailable' },
     latestBlock: blocksResult.data?.[0]
       ? { ...blocksResult.data[0], status: 'fresh', source: blocksResult.source }
@@ -38,12 +32,7 @@ module.exports = async (req, res) => {
       ? { unconfirmedTxCount: mempool.data.count, status: 'fresh', source: mempool.source }
       : { status: 'unavailable' },
     market: marketConsensus.price
-      ? {
-          ...marketConsensus.price,
-          spreadPct: marketConsensus.spreadPct,
-          flag: marketConsensus.flag,
-          status: 'fresh',
-        }
+      ? { ...marketConsensus.price, spreadPct: marketConsensus.spreadPct, flag: marketConsensus.flag, status: 'fresh' }
       : { status: 'unavailable' },
     providers: getHealthSnapshot(),
     updatedAt: new Date().toISOString(),
