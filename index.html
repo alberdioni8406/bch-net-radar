@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCH Radar — Bitcoin Cash Network Observatory</title>
+<meta name="description" content="Real-time Bitcoin Cash network analytics: blocks, transactions, mempool, mining, CashTokens and market data from multiple independent sources.">
+<meta property="og:title" content="BCH Radar — Bitcoin Cash Network Observatory">
+<meta property="og:description" content="Multi-provider BCH network analytics. No single point of failure, no fabricated data.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%230A0E14%22/><circle cx=%2250%22 cy=%2250%22 r=%2230%22 fill=%22none%22 stroke=%22%2332C48D%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%2332C48D%22/></svg>">
+<style>
+  :root{
+    --bg:#0A0E14;
+    --panel:#10151D;
+    --panel-2:#141A24;
+    --line:#232B38;
+    --text:#E4E9F2;
+    --muted:#7C8AA0;
+    --accent:#32C48D;
+    --accent-dim:#1E7A57;
+    --amber:#D9A441;
+    --red:#E0645A;
+    --font-display:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+    --font-body:'Inter',ui-sans-serif,system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+
+  /* ---- Header / signature radar sweep ---- */
+  header{
+    position:relative;
+    border-bottom:1px solid var(--line);
+    padding:28px 24px 24px;
+    overflow:hidden;
+  }
+  .sweep{
+    position:absolute;
+    top:-120px;right:-120px;
+    width:280px;height:280px;
+    border-radius:50%;
+    background:conic-gradient(from 0deg, transparent 0deg, rgba(50,196,141,0.18) 30deg, transparent 60deg);
+    animation:spin 6s linear infinite;
+    pointer-events:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.sweep{animation:none}}
+
+  .header-inner{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;position:relative;z-index:1}
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand h1{font-family:var(--font-display);font-size:26px;font-weight:600;letter-spacing:-0.01em}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;box-shadow:0 0 8px var(--accent)}
+  .tagline{color:var(--muted);font-size:13px;margin-top:4px}
+  .global-status{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:right}
+  .global-status .updated{color:var(--text)}
+
+  main{max-width:1180px;margin:0 auto;padding:32px 24px 80px}
+
+  /* ---- Hero metrics ---- */
+  .hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:40px}
+  .metric{background:var(--panel);padding:20px}
+  .metric .label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)}
+  .metric .value{font-family:var(--font-mono);font-size:22px;margin-top:8px;color:var(--text)}
+  .metric .sub{font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--font-mono)}
+  .metric .value.na{color:var(--muted);font-size:15px}
+
+  section{margin-bottom:48px}
+  .section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .section-head h2{font-family:var(--font-display);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em}
+  .section-head .note{font-size:12px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line)}
+  tr:hover td{background:var(--panel-2)}
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){.grid-2{grid-template-columns:1fr}}
+
+  .badge{font-family:var(--font-mono);font-size:11px;padding:3px 8px;border-radius:4px;display:inline-block}
+  .badge.operational{background:rgba(50,196,141,0.12);color:var(--accent)}
+  .badge.degraded,.badge.rate_limited{background:rgba(217,164,65,0.12);color:var(--amber)}
+  .badge.unavailable{background:rgba(224,100,90,0.12);color:var(--red)}
+  .badge.not_configured{background:rgba(124,138,160,0.12);color:var(--muted)}
+
+  form.lookup{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text]{flex:1;min-width:200px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;color:var(--text);font-family:var(--font-mono);font-size:13px}
+  input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px}
+  button{background:var(--accent);color:#04150E;border:none;border-radius:6px;padding:10px 16px;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--font-body)}
+  button:hover{background:#3fd89e}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  #lookupResult{margin-top:14px;font-family:var(--font-mono);font-size:13px;white-space:pre-wrap;color:var(--muted)}
+
+  .donation{background:var(--panel);border:1px solid var(--accent-dim);border-radius:10px;padding:28px;text-align:center}
+  .donation h2{font-family:var(--font-display);font-size:18px;margin-bottom:8px}
+  .donation p{color:var(--muted);font-size:13px;margin-bottom:18px;max-width:480px;margin-left:auto;margin-right:auto}
+  .addr-box{display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
+  .addr-box code{font-family:var(--font-mono);font-size:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:10px 14px;word-break:break-all}
+  .copy-btn{background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
+  .copy-btn:hover{background:var(--line)}
+
+  footer{border-top:1px solid var(--line);padding:24px;text-align:center;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="sweep" aria-hidden="true"></div>
+  <div class="header-inner">
+    <div>
+      <div class="brand"><span class="dot"></span><h1>BCH Radar</h1></div>
+      <p class="tagline">Bitcoin Cash network observatory — multiple independent sources, no single point of failure</p>
+    </div>
+    <div class="global-status">
+      <div>Last sync: <span class="updated" id="lastSync">—</span></div>
+      <div id="genTime"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="hero-grid" id="heroGrid">
+    <div class="metric"><div class="label">BCH Price</div><div class="value na" id="mPrice">loading…</div><div class="sub" id="mPriceSub"></div></div>
+    <div class="metric"><div class="label">Block Height</div><div class="value na" id="mHeight">loading…</div><div class="sub" id="mHeightSub"></div></div>
+    <div class="metric"><div class="label">Latest Block Age</div><div class="value na" id="mAge">loading…</div><div class="sub" id="mAgeSub"></div></div>
+    <div class="metric"><div class="label">Avg Block Interval</div><div class="value na" id="mInterval">loading…</div></div>
+    <div class="metric"><div class="label">Mempool Txs</div><div class="value na" id="mMempool">loading…</div></div>
+    <div class="metric"><div class="label">Difficulty</div><div class="value na" id="mDiff">loading…</div></div>
+    <div class="metric"><div class="label">Est. Hashrate</div><div class="value na" id="mHashrate">loading…</div><div class="sub">estimated from difficulty</div></div>
+    <div class="metric"><div class="label">Network Status</div><div class="value na" id="mConsensus">loading…</div></div>
+  </div>
+
+  <section>
+    <div class="section-head"><h2>Recent Blocks</h2><span class="note" id="blocksNote"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Height</th><th>Hash</th><th>Age</th><th>Txs</th><th>Size</th><th>Fees</th></tr></thead>
+        <tbody id="blocksBody"><tr><td colspan="6" style="color:var(--muted)">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div>
+      <div class="section-head"><h2>Market</h2></div>
+      <div class="card" id="marketCard" style="font-family:var(--font-mono);font-size:13px">loading…</div>
+    </div>
+    <div>
+      <div class="section-head"><h2>Mempool</h2></div>
+      <div class="card" id="mempoolCard" style="font-family:var(--font-mono);font-size:13px">loading…</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Address Lookup</h2><span class="note">read-only — no keys ever requested</span></div>
+    <div class="card">
+      <form class="lookup" id="addrForm">
+        <input type="text" id="addrInput" placeholder="bitcoincash:q...">
+        <button type="submit">Look up</button>
+      </form>
+      <div id="lookupResult"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Infrastructure Health</h2><span class="note">this session only — resets on cold start</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Provider</th><th>Status</th><th>Latency</th><th>Failures</th><th>Last Success</th></tr></thead>
+        <tbody id="providersBody"><tr><td colspan="5" style="color:var(--muted)">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="donation">
+      <h2>Support BCH Radar</h2>
+      <p>BCH Radar is community-supported, independent infrastructure. If this dashboard is useful to you, you can support its continued development.</p>
+      <div class="addr-box">
+        <code id="donationAddr">bitcoincash:qrtv37u522gz8a5lezfqk5vukly93cu7gc8tn09040</code>
+        <button class="copy-btn" id="copyBtn">Copy</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  BCH Radar draws from Haskoin, Blockchair, 3xpl, Paytaca BCMR, CoinPaprika and CoinGecko. Data is never fabricated — unavailable metrics are labeled, not guessed.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function fmtAge(iso){
+  if(!iso) return '—';
+  const s = Math.floor((Date.now() - new Date(iso).getTime())/1000);
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+function fmtNum(n){ return n==null ? '—' : Number(n).toLocaleString(); }
+function na(el, cls=true){ el.textContent='unavailable'; if(cls) el.classList.add('na'); }
+
+async function loadRadar(){
+  try{
+    const res = await fetch('/api/radar');
+    const d = await res.json();
+
+    $('lastSync').textContent = new Date(d.updatedAt).toLocaleTimeString();
+    $('genTime').textContent = d.generationMs ? d.generationMs+'ms' : '';
+
+    // Hero: price
+    if(d.market && d.market.status==='fresh'){
+      $('mPrice').classList.remove('na');
+      $('mPrice').textContent = '$'+Number(d.market.priceUsd).toFixed(2);
+      $('mPriceSub').textContent = d.market.flag==='discrepancy'
+        ? 'spread '+d.market.spreadPct.toFixed(2)+'% — flagged'
+        : 'CoinPaprika · cross-checked';
+    } else { na($('mPrice')); }
+
+    // Hero: block height / age
+    if(d.latestBlock && d.latestBlock.status==='fresh'){
+      $('mHeight').classList.remove('na'); $('mHeight').textContent = fmtNum(d.latestBlock.height);
+      $('mHeightSub').textContent = d.latestBlock.source;
+      $('mAge').classList.remove('na'); $('mAge').textContent = fmtAge(d.latestBlock.timestamp);
+    } else { na($('mHeight')); na($('mAge')); }
+
+    // Network stats
+    if(d.network && d.network.status==='fresh'){
+      $('mDiff').classList.remove('na'); $('mDiff').textContent = fmtNum(Math.round(d.network.difficulty));
+      $('mConsensus').classList.remove('na'); $('mConsensus').textContent = d.network.consensus || '—';
+    } else { na($('mDiff')); na($('mConsensus')); }
+
+    // Mempool
+    if(d.mempool && d.mempool.status==='fresh'){
+      $('mMempool').classList.remove('na'); $('mMempool').textContent = fmtNum(d.mempool.unconfirmedTxCount);
+      $('mempoolCard').textContent = 'Unconfirmed: '+fmtNum(d.mempool.unconfirmedTxCount)+'\nFee distribution: unavailable from current providers\nSource: '+d.mempool.source;
+    } else { na($('mMempool')); $('mempoolCard').textContent = 'unavailable from current providers'; }
+
+    // Market card
+    if(d.market && d.market.status==='fresh'){
+      $('marketCard').textContent =
+        'Price:      $'+Number(d.market.priceUsd).toFixed(2)+'\n'+
+        '24h change: '+(d.market.change24h!=null? d.market.change24h.toFixed(2)+'%':'—')+'\n'+
+        'Market cap: $'+fmtNum(Math.round(d.market.marketCapUsd))+'\n'+
+        'Primary:    coinpaprika\n'+
+        'Cross-check: coingecko'+(d.market.flag==='discrepancy' ? ' ⚠ discrepancy flagged' : ' ✓');
+    } else { $('marketCard').textContent = 'unavailable'; }
+
+    // Blocks table
+    const tb = $('blocksBody');
+    if(d.blocks && d.blocks.length){
+      $('blocksNote').textContent = 'source: '+(d.latestBlock.source||'—');
+      tb.innerHTML = d.blocks.map(b => `<tr>
+        <td>${fmtNum(b.height)}</td>
+        <td>${b.hash ? b.hash.slice(0,16)+'…' : '—'}</td>
+        <td>${fmtAge(b.timestamp)}</td>
+        <td>${fmtNum(b.txCount)}</td>
+        <td>${b.sizeBytes ? (b.sizeBytes/1024).toFixed(1)+' KB' : '—'}</td>
+        <td>${b.totalFeesSats!=null ? (b.totalFeesSats/1e8).toFixed(6)+' BCH' : '—'}</td>
+      </tr>`).join('');
+
+      // block interval avg from timestamps we already have
+      const withTs = d.blocks.filter(b=>b.timestamp);
+      if(withTs.length>1){
+        const diffs=[];
+        for(let i=0;i<withTs.length-1;i++){
+          diffs.push((new Date(withTs[i].timestamp)-new Date(withTs[i+1].timestamp))/1000);
+        }
+        const avg = diffs.reduce((a,b)=>a+b,0)/diffs.length;
+        $('mInterval').classList.remove('na');
+        $('mInterval').textContent = Math.round(avg)+'s';
+      } else { na($('mInterval')); }
+    } else {
+      tb.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">unavailable from current providers</td></tr>';
+      na($('mInterval'));
+    }
+
+    // hashrate estimate from difficulty (same formula as /api/mining)
+    if(d.network && d.network.difficulty){
+      const hr = (d.network.difficulty * Math.pow(2,32)) / 600;
+      $('mHashrate').classList.remove('na');
+      $('mHashrate').textContent = (hr/1e18).toFixed(2)+' EH/s';
+    } else { na($('mHashrate')); }
+
+    // Providers table
+    const pb = $('providersBody');
+    const entries = Object.entries(d.providers||{});
+    if(entries.length){
+      pb.innerHTML = entries.map(([name,info]) => `<tr>
+        <td>${name}</td>
+        <td><span class="badge ${info.status}">${info.status.replace('_',' ')}</span></td>
+        <td>${info.lastLatencyMs!=null ? info.lastLatencyMs+'ms' : '—'}</td>
+        <td>${info.failureCount||0}</td>
+        <td>${info.lastSuccess ? fmtAge(info.lastSuccess) : '—'}</td>
+      </tr>`).join('');
+    } else {
+      pb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">no requests yet this session</td></tr>';
+    }
+
+  }catch(e){
+    console.error('radar load failed', e);
+  }
+}
+
+$('addrForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const addr = $('addrInput').value.trim();
+  if(!addr) return;
+  $('lookupResult').textContent = 'looking up…';
+  try{
+    const res = await fetch('/api/address?addr='+encodeURIComponent(addr));
+    const d = await res.json();
+    if(!d.data){ $('lookupResult').textContent = 'Address not found or all providers unavailable.'; return; }
+    $('lookupResult').textContent =
+      'Confirmed balance: '+((d.data.confirmedBalanceSats||0)/1e8).toFixed(8)+' BCH\n'+
+      'UTXOs: '+(d.data.utxos?.length ?? d.data.utxoCount ?? '—')+'\n'+
+      'Tx count: '+(d.data.txCount ?? '—')+'\n'+
+      'Source: '+d.source;
+  }catch(err){
+    $('lookupResult').textContent = 'Lookup failed.';
+  }
+});
+
+$('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText($('donationAddr').textContent.trim());
+  $('copyBtn').textContent = 'Copied';
+  setTimeout(()=>{ $('copyBtn').textContent = 'Copy'; }, 1500);
+});
+
+loadRadar();
+setInterval(loadRadar, 15000);
+</script>
+</body>
+</html>
