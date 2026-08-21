@@ -165,6 +165,20 @@
   </section>
 
   <section>
+    <div class="section-head"><h2>CashTokens</h2><span class="note">via Paytaca BCMR registry</span></div>
+    <div class="card">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
+        BCMR is a metadata registry, not a token index — there's no "browse all tokens" feed to pull from, so this looks up one token category at a time. Paste a CashToken category ID (the 64-char hex genesis txid) to fetch its registered metadata.
+      </p>
+      <form class="lookup" id="tokenForm">
+        <input type="text" id="tokenInput" placeholder="token category id (hex)">
+        <button type="submit">Look up</button>
+      </form>
+      <div id="tokenResult"></div>
+    </div>
+  </section>
+
+  <section>
     <div class="section-head"><h2>Address Lookup</h2><span class="note">read-only — no keys ever requested</span></div>
     <div class="card">
       <form class="lookup" id="addrForm">
@@ -240,10 +254,12 @@ async function loadRadar(){
     } else { na($('mHeight')); na($('mAge')); }
 
     // Network stats
-    if(d.network && d.network.status==='fresh'){
+    if(d.network && d.network.status==='fresh' && d.network.difficulty!=null){
       $('mDiff').classList.remove('na'); $('mDiff').textContent = fmtNum(Math.round(d.network.difficulty));
-      $('mConsensus').classList.remove('na'); $('mConsensus').textContent = d.network.consensus || '—';
-    } else { na($('mDiff')); na($('mConsensus')); }
+    } else { na($('mDiff')); }
+    if(d.network && d.network.consensus && d.network.consensus!=='unavailable'){
+      $('mConsensus').classList.remove('na'); $('mConsensus').textContent = d.network.consensus;
+    } else { na($('mConsensus')); }
 
     // Mempool
     if(d.mempool && d.mempool.status==='fresh'){
@@ -333,6 +349,26 @@ $('addrForm').addEventListener('submit', async (e) => {
       'Source: '+d.source;
   }catch(err){
     $('lookupResult').textContent = 'Lookup failed.';
+  }
+});
+
+$('tokenForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const category = $('tokenInput').value.trim();
+  if(!category) return;
+  $('tokenResult').textContent = 'looking up…';
+  try{
+    const res = await fetch('/api/cash-tokens?category='+encodeURIComponent(category));
+    const d = await res.json();
+    if(!d.data || !d.data.name){ $('tokenResult').textContent = 'No BCMR metadata registered for this category.'; return; }
+    $('tokenResult').textContent =
+      'Name:      '+d.data.name+'\n'+
+      'Symbol:    '+(d.data.symbol||'—')+'\n'+
+      'Decimals:  '+(d.data.decimals??'—')+'\n'+
+      'Type:      '+(d.data.isNft ? 'NFT' : 'Fungible')+'\n'+
+      'Description: '+(d.data.description||'—');
+  }catch(err){
+    $('tokenResult').textContent = 'Lookup failed.';
   }
 });
 
