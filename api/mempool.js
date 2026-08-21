@@ -2,20 +2,21 @@ const { blockchainProviders } = require('../lib/providers');
 const { envelope, sendJson } = require('../lib/utils/envelope');
 
 module.exports = async (req, res) => {
-  const result = await blockchainProviders.getMempool();
+  const detail = await blockchainProviders.getMempoolDetail();
 
-  if (!result.data) {
+  if (detail.unconfirmedTxCount === null && detail.sizeBytes === null) {
     return sendJson(res, 200, envelope(null));
   }
 
-  // Haskoin's /mempool only exposes txids, not fee-rate breakdowns —
-  // we surface exactly that and label the rest honestly rather than
-  // inventing a fee-distribution chart with no backing data.
   sendJson(res, 200, envelope(
     {
-      unconfirmedTxCount: result.data.count,
-      feeDistribution: 'unavailable from current providers',
+      unconfirmedTxCount: detail.unconfirmedTxCount,
+      sizeBytes: detail.sizeBytes,
+      suggestedFeeSatPerByte: detail.suggestedFeeSatPerByte,
+      feeDistribution: 'per-tier distribution unavailable from current providers — suggested fee rate above is the closest real signal',
+      countSource: detail.countSource,
+      statsSource: detail.statsSource,
     },
-    { source: result.source }
+    { source: detail.countSource || detail.statsSource }
   ));
 };
