@@ -1,67 +1,135 @@
 # BCH Radar
 
-Bitcoin Cash network observatory. Multi-provider by design — never depends on
-Haskoin alone.
+**Bitcoin Cash network observatory** — multi-provider by design, no single point of failure.
+
+Live: [https://bch-net-radar.vercel.app](https://bch-net-radar.vercel.app)
+
+---
+
+## What it does
+
+BCH Radar aggregates real-time Bitcoin Cash network data from multiple independent sources with automatic fallbacks. If one provider goes down or lags, the system keeps serving data from the others.
+
+Current live features:
+- Network stats (block height, difficulty, estimated hashrate, mempool)
+- Recent blocks + charts (block interval, transactions per block, block size)
+- Market data (price + cross-checks)
+- Address lookup (read-only)
+- Provider health monitoring
+- Consensus verification across sources
+
+---
 
 ## Architecture
 
 ```
-Frontend (public/index.html)
-   ↓
-api/*.js  (12 Vercel serverless functions, hard cap)
-   ↓
-lib/providers  (provider abstraction + fallback chains)
-   ↓
-lib/providers/{haskoin,blockchair,threexpl,paytaca-bcmr,coinpaprika,coingecko,fx}.js
-   ↓
-lib/health + lib/cache
+Frontend (index.html)
+        ↓
+api/*.js          ← Vercel serverless functions (maxDuration 10s)
+        ↓
+lib/providers/    ← Provider abstraction + fallback chains
+        ↓
+  haskoin.js          (original api.haskoin.com)
+  haskoin-mirror      (blockchain.info Haskoin Store)
+  blockchair.js
+  threexpl.js
+  paytaca-bcmr.js
+  coinpaprika.js
+  coingecko.js
+  fx.js
+        ↓
+lib/health + lib/memory-cache + lib/utils
 ```
 
-## API routes (12/12)
+### API routes
 
-`network` · `blocks` · `block/[height]` · `transactions` · `tx/[txid]` ·
-`address` · `mempool` · `mining` · `cash-tokens` · `market` · `providers` ·
-`radar` (aggregated dashboard endpoint)
+| Route              | Description                          |
+|--------------------|--------------------------------------|
+| `/api/radar`       | Aggregated dashboard endpoint (main) |
+| `/api/network`     | Network stats                        |
+| `/api/blocks`      | Recent blocks                        |
+| `/api/block`       | Single block by height/hash          |
+| `/api/mempool`     | Mempool stats                        |
+| `/api/mining`      | Difficulty + hashrate estimates      |
+| `/api/market`      | Price data                           |
+| `/api/address`     | Address lookup                       |
+| `/api/transactions`| Transactions                         |
+| `/api/txid`        | Single transaction                   |
+| `/api/cash-tokens` | CashTokens metadata (BCMR)           |
+| `/api/providers`   | Provider health snapshot             |
 
-## Haskoin status
+---
 
-The original `api.haskoin.com/bch` instance is kept as the **first** entry
-in every blockchain fallback chain (`lib/providers/index.js`). It is
-currently resyncing and will fail health checks until it recovers — no code
-change is needed when it comes back; it will simply start winning the
-fallback race again.
+## Data sources & fallbacks
 
-The blockchain.info-hosted mirror (`HASKOIN_MIRROR_URL`, defaults to
-`https://api.blockchain.info/hashkoin-store/bch`) is the second entry,
-serving as the active source in the meantime.
+**Blockchain data** (in priority order):
+1. Original Haskoin (`api.haskoin.com/bch`) — preferred when healthy
+2. Haskoin mirror (`api.blockchain.info/hashkoin-store/bch`) — currently primary
+3. 3xpl
+4. Blockchair
 
-## No fake data
+**Market data**:
+- CoinPaprika (primary)
+- CoinGecko (cross-check)
+- FX rates
 
-Every route returns `{ data, source, timestamp, ageSeconds, status }`. If a
-metric can't be retrieved from any provider, `data` is `null` and the
-frontend renders "unavailable" — never a placeholder number.
+**CashTokens**:
+- Paytaca BCMR
 
-## Setup
+Every response includes the actual source used. If no provider can answer, the frontend shows `unavailable` — never fabricated numbers.
+
+---
+
+## Design principles
+
+- **No fake data** — if a metric cannot be retrieved, it is explicitly `null` / unavailable
+- **Multi-provider by default** — never depends on a single API
+- **Consensus awareness** — the `/api/radar` endpoint can report agreement across sources
+- **Zero required API keys** for core functionality
+- **Transparent health** — the UI shows which providers are responding and their latency
+
+---
+
+## Local development
 
 ```bash
 npm install -g vercel
 vercel dev
 ```
 
-All core providers work with zero API keys. See `.env.example` for optional
-keys that raise rate limits.
+Optional environment variables (see `.env.example`):
 
-## Not yet wired (coming up before I can tell it's "done")
+```bash
+HASKOIN_MIRROR_URL=          # defaults to blockchain.info mirror
+BLOCKCHAIR_API_KEY=          # raises free-tier limits
+THREEXPL_API_KEY=            # raises free-tier limits
+```
 
-- Live verification of every provider endpoint against current real
-  responses (this scaffold was built from provider documentation — the
-  code has never made a real network call yet; test against Vercel/local
-  dev before trusting it)
-- Mining pool distribution (MiningPoolStats/2Miners/Minerstat — none
-  integrated yet, `mining` panel currently only covers difficulty-derived
-  hashrate + last-block subsidy/fees)
-- CashTokens *activity* feed (BCMR gives metadata by category; token
-  transaction/activity tracking needs a Fulcrum or 3xpl indexer query,
-  not yet built)
-- Charts (frontend currently tables + hero metrics only)
-- Historical block-size/fee time series beyond the last ~144 blocks
+---
+
+## Current status (early public beta)
+
+**Working now**
+- Live multi-source network dashboard
+- Charts (block interval, txs/block, size)
+- Price + cross-checks
+- Address lookup
+- Provider health panel
+- Fallback chains
+
+**Still planned / partial**
+- Mining pool distribution
+- Full CashTokens activity feed (beyond metadata)
+- Longer historical time series
+- More polish and edge-case hardening
+
+Feedback and pull requests are very welcome.
+
+---
+
+## Support
+
+BCH Radar is independent community infrastructure.
+
+`bitcoincash:qrtv37u522gz8a5lezfqk5vukly93cu7gc8tn09040`
+```
