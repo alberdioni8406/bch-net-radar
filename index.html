@@ -144,6 +144,27 @@
   </div>
 
   <section>
+    <div class="section-head"><h2>Charts</h2><span class="note">derived from the last 10 blocks — real data, no interpolation</span></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="label" style="font-size:11px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Block Interval (seconds)</div>
+        <canvas id="chartInterval" width="520" height="160" style="width:100%;height:160px"></canvas>
+      </div>
+      <div class="card">
+        <div class="label" style="font-size:11px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Transactions per Block</div>
+        <canvas id="chartTx" width="520" height="160" style="width:100%;height:160px"></canvas>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="label" style="font-size:11px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Block Size (KB)</div>
+      <canvas id="chartSize" width="1080" height="160" style="width:100%;height:160px"></canvas>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-top:10px">
+      Longer-range charts (hashrate, fees, price over days/weeks) need a time-series store, which this deployment intentionally doesn't run — see the project README.
+    </p>
+  </section>
+
+  <section>
     <div class="section-head"><h2>Recent Blocks</h2><span class="note" id="blocksNote"></span></div>
     <div class="table-wrap">
       <table>
@@ -169,6 +190,9 @@
     <div class="card">
       <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
         BCMR is a metadata registry, not a token index — there's no "browse all tokens" feed to pull from, so this looks up one token category at a time. Paste a CashToken category ID (the 64-char hex genesis txid) to fetch its registered metadata.
+      </p>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:14px;border-top:1px solid var(--line);padding-top:12px">
+        Mining pool distribution isn't shown for the same reason token browsing isn't: attributing blocks to pools means parsing each block's coinbase transaction and matching it against a pool-tag registry — real infrastructure work, not a data-fetch. Not implemented rather than faked.
       </p>
       <form class="lookup" id="tokenForm">
         <input type="text" id="tokenInput" placeholder="token category id (hex)">
@@ -229,6 +253,67 @@ function fmtAge(iso){
 function fmtNum(n){ return n==null ? '—' : Number(n).toLocaleString(); }
 function na(el, cls=true){ el.textContent='unavailable'; if(cls) el.classList.add('na'); }
 
+function drawBarChart(canvasId, values, { color = '#32C48D', suffix = '' } = {}) {
+  const canvas = $(canvasId);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  if(!values || values.length === 0){
+    ctx.fillStyle = '#7C8AA0';
+    ctx.font = '12px monospace';
+    ctx.fillText('unavailable', 8, h/2);
+    return;
+  }
+
+  const max = Math.max(...values, 1);
+  const padding = 18;
+  const barGap = 6;
+  const barW = (w - padding) / values.length - barGap;
+
+  ctx.strokeStyle = '#232B38';
+  ctx.beginPath(); ctx.moveTo(0, h-padding); ctx.lineTo(w, h-padding); ctx.stroke();
+
+  values.forEach((v, i) => {
+    const barH = (v / max) * (h - padding - 10);
+    const x = i * (barW + barGap) + barGap/2;
+    const y = h - padding - barH;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(x, y, barW, barH);
+    ctx.globalAlpha = 1;
+  });
+
+  // label the most recent (rightmost) bar's value
+  ctx.fillStyle = '#E4E9F2';
+  ctx.font = '11px monospace';
+  const last = values[values.length-1];
+  ctx.fillText(Math.round(last)+suffix, w - 60, 12);
+}
+
+function renderCharts(blocks){
+  if(!blocks || blocks.length < 2){
+    drawBarChart('chartInterval', []); drawBarChart('chartTx', []); drawBarChart('chartSize', []);
+    return;
+  }
+  const sorted = [...blocks].sort((a,b)=>a.height-b.height); // oldest → newest, left to right
+  const intervals = [];
+  for(let i=1;i<sorted.length;i++){
+    if(sorted[i].timestamp && sorted[i-1].timestamp){
+      intervals.push((new Date(sorted[i].timestamp) - new Date(sorted[i-1].timestamp))/1000);
+    }
+  }
+  const txCounts = sorted.map(b=>b.txCount).filter(n=>typeof n==='number');
+  const sizes = sorted.map(b=> b.sizeBytes!=null ? b.sizeBytes/1024 : null).filter(n=>n!=null);
+
+  drawBarChart('chartInterval', intervals, { suffix:'s' });
+  drawBarChart('chartTx', txCounts, { color:'#4A9EDB' });
+  drawBarChart('chartSize', sizes, { color:'#D9A441', suffix:'KB' });
+}
+
 async function loadRadar(){
   try{
     const res = await fetch('/api/radar');
@@ -264,7 +349,12 @@ async function loadRadar(){
     // Mempool
     if(d.mempool && d.mempool.status==='fresh'){
       $('mMempool').classList.remove('na'); $('mMempool').textContent = fmtNum(d.mempool.unconfirmedTxCount);
-      $('mempoolCard').textContent = 'Unconfirmed: '+fmtNum(d.mempool.unconfirmedTxCount)+'\nFee distribution: unavailable from current providers\nSource: '+d.mempool.source;
+      const lines = ['Unconfirmed txs: '+fmtNum(d.mempool.unconfirmedTxCount)+' ('+(d.mempool.countSource||'—')+')'];
+      if(d.mempool.sizeBytes!=null) lines.push('Mempool size: '+(d.mempool.sizeBytes/1024).toFixed(1)+' KB');
+      if(d.mempool.suggestedFeeSatPerByte!=null) lines.push('Suggested fee: '+d.mempool.suggestedFeeSatPerByte+' sat/byte');
+      lines.push('Per-tier fee distribution: unavailable from current providers');
+      if(d.mempool.statsSource) lines.push('Stats source: '+d.mempool.statsSource);
+      $('mempoolCard').textContent = lines.join('\n');
     } else { na($('mMempool')); $('mempoolCard').textContent = 'unavailable from current providers'; }
 
     // Market card
@@ -305,6 +395,7 @@ async function loadRadar(){
       tb.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">unavailable from current providers</td></tr>';
       na($('mInterval'));
     }
+    renderCharts(d.blocks);
 
     // hashrate estimate from difficulty (same formula as /api/mining)
     if(d.network && d.network.difficulty){
