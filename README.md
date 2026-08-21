@@ -51,7 +51,7 @@ vercel dev
 All core providers work with zero API keys. See `.env.example` for optional
 keys that raise rate limits.
 
-## Not yet wired (do before calling this "done")
+## Not yet wired (coming up before I can tell it's "done")
 
 - Live verification of every provider endpoint against current real
   responses (this scaffold was built from provider documentation — the
